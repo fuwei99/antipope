@@ -5,8 +5,8 @@ import r2Uploader from '../utils/r2_uploader.js';
 import logger from '../utils/logger.js';
 
 export async function generateAssistantResponse(requestBody, tokenSource, callback, retryCount = 0) {
-  // 最大重试次数
-  const MAX_RETRIES = 5;
+  // 最大重试次数为 Token 总数
+  const MAX_RETRIES = tokenManager.tokens.length;
 
   let token;
 
