@@ -25,7 +25,7 @@ config.json
 data/
 
 # Config directory (contains sensitive data before zip)
-config/
+/config/
 
 # Uploads
 uploads/
