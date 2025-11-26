@@ -56,8 +56,8 @@ export async function generateAssistantResponse(requestBody, tokenSource, callba
       if (newToken) {
         logger.info(`切换到新 Token，准备重试请求 (重试次数: ${retryCount + 1}/${MAX_RETRIES})...`);
 
-        // 增加一个短暂的延迟，避免瞬间发起大量请求
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 增加延迟，避免瞬间发起大量请求
+        await new Promise(resolve => setTimeout(resolve, 10000));
 
         // 递归重试
         return generateAssistantResponse(requestBody, { type: 'admin' }, callback, retryCount + 1);
