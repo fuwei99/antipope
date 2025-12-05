@@ -160,9 +160,12 @@ async function fetchImageBase64(url) {
   }
 }
 
-async function openaiMessageToAntigravity(openaiMessages) {
+async function openaiMessageToAntigravity(openaiMessages, modelName) {
   const antigravityMessages = [];
   let pendingImages = [];
+
+  // 判断是否需要处理签名（包含 image 或以 -sig 结尾）
+  const shouldProcessSig = modelName && (modelName.includes('image') || modelName.endsWith('-sig'));
 
   for (const message of openaiMessages) {
     if (message.role === "user" || message.role === "system") {
@@ -188,21 +191,23 @@ async function openaiMessageToAntigravity(openaiMessages) {
       let currentSignature = null;
 
       // 1. 处理签名 URL
-      const sigMatch = message.content?.match(/<!-- SIG_URL: (https?:\/\/[^ ]+) -->/);
-      if (sigMatch) {
-        const sigUrl = sigMatch[1];
-        console.log(`[DEBUG] 发现签名 URL: ${sigUrl}`);
-        const signature = await fetchText(sigUrl);
-        if (signature) {
-          console.log(`[DEBUG] 签名下载成功，长度: ${signature.length}`);
-          currentSignature = signature;
+      if (shouldProcessSig) {
+        const sigMatch = message.content?.match(/<!-- SIG_URL: (https?:\/\/[^ ]+) -->/);
+        if (sigMatch) {
+          const sigUrl = sigMatch[1];
+          console.log(`[DEBUG] 发现签名 URL: ${sigUrl}`);
+          const signature = await fetchText(sigUrl);
+          if (signature) {
+            console.log(`[DEBUG] 签名下载成功，长度: ${signature.length}`);
+            currentSignature = signature;
+          } else {
+            console.error(`[DEBUG] 签名下载失败或为空`);
+          }
+          // 从内容中移除签名注释
+          message.content = message.content.replace(sigMatch[0], '');
         } else {
-          console.error(`[DEBUG] 签名下载失败或为空`);
+          // console.log(`[DEBUG] 未在 Assistant 消息中发现签名 URL`);
         }
-        // 从内容中移除签名注释
-        message.content = message.content.replace(sigMatch[0], '');
-      } else {
-        console.log(`[DEBUG] 未在 Assistant 消息中发现签名 URL`);
       }
 
       // 2. 处理图片回传
@@ -303,8 +308,7 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
     modelName === 'gemini-2.5-pro' ||
     modelName.startsWith('gemini-3-pro-') ||
     modelName === "rev19-uic3-1p" ||
-    modelName === "gpt-oss-120b-medium" ||
-    modelName.endsWith('-sig')
+    modelName === "gpt-oss-120b-medium"
   let actualModelName = modelName;
 
   if (modelName.endsWith('-thinking') && !modelName.includes('opus')) {
@@ -318,7 +322,7 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
     actualModelName = 'gemini-3-pro-image';
   }
 
-  const contents = await openaiMessageToAntigravity(openaiMessages);
+  const contents = await openaiMessageToAntigravity(openaiMessages, modelName);
 
   return {
     project: generateProjectId(),
@@ -339,10 +343,7 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
       sessionId: generateSessionId()
     },
     model: actualModelName,
-    userAgent: "antigravity",
-    _internalConfig: {
-      shouldUploadSig: modelName.endsWith('-sig') || actualModelName.includes('image')
-    }
+    userAgent: "antigravity"
   }
 }
 // HTML转义函数，防止XSS攻击
