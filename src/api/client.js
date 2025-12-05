@@ -26,10 +26,6 @@ export async function generateAssistantResponse(requestBody, tokenSource, callba
 
   const url = config.api.url;
 
-  // 创建请求体副本，移除内部配置字段，防止发送给 Google API 导致报错
-  const fetchBody = { ...requestBody };
-  delete fetchBody._internalConfig;
-
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -39,7 +35,7 @@ export async function generateAssistantResponse(requestBody, tokenSource, callba
       'Content-Type': 'application/json',
       'Accept-Encoding': 'gzip'
     },
-    body: JSON.stringify(fetchBody)
+    body: JSON.stringify(requestBody)
   });
 
   if (!response.ok) {
@@ -106,8 +102,13 @@ export async function generateAssistantResponse(requestBody, tokenSource, callba
             for (const part of parts) {
               // 独立检查 thoughtSignature，不依赖于 part.thought === true
               // 仅针对包含 'image' 或以 '-sig' 结尾的模型启用签名上传
-              const shouldUploadSig = requestBody._internalConfig?.shouldUploadSig || (requestBody.model && (requestBody.model.includes('image') || requestBody.model.endsWith('-sig')));
+              const shouldUploadSig = requestBody.model && (requestBody.model.includes('image') || requestBody.model.endsWith('-sig'));
               const signature = part.thoughtSignature || part.thought_signature;
+
+              // 调试日志
+              if (signature) {
+                console.log(`[DEBUG] 检测到签名: model=${requestBody.model}, shouldUpload=${shouldUploadSig}, r2Enabled=${r2Uploader.isEnabled()}`);
+              }
 
               if (signature && r2Uploader.isEnabled() && shouldUploadSig) {
                 const filename = `sig_${Date.now()}_${Math.random().toString(36).substring(2)}.txt`;
