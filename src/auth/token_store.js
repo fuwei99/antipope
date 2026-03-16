@@ -170,16 +170,17 @@ class TokenStore {
     }
 
     await this._ensureFileExists();
+    let fileTokens = [];
     try {
       const data = await fs.readFile(this.filePath, 'utf8');
       const parsed = JSON.parse(data || '{}');
 
       // 兼容旧格式：如果是数组，直接使用
       if (Array.isArray(parsed)) {
-        this._cache = parsed;
+        fileTokens = parsed;
         this._lastReadOk = true;
       } else if (parsed.tokens && Array.isArray(parsed.tokens)) {
-        this._cache = parsed.tokens;
+        fileTokens = parsed.tokens;
         this._lastReadOk = true;
       } else {
         log.warn('账号配置文件格式异常，保留缓存并跳过本次读取');
@@ -188,7 +189,7 @@ class TokenStore {
           this._cacheTime = Date.now();
           return this._cache;
         }
-        return [];
+        fileTokens = [];
       }
     } catch (error) {
       log.error('读取账号配置文件失败:', error.message);
@@ -197,8 +198,36 @@ class TokenStore {
         this._cacheTime = Date.now();
         return this._cache;
       }
-      return [];
+      fileTokens = [];
     }
+
+    // 合并来自环境变量 ACCOUNT_JSON 的账号 (由用户请求添加)
+    if (process.env.ACCOUNT_JSON) {
+      try {
+        let envData = JSON.parse(process.env.ACCOUNT_JSON);
+        // 如果是 token.json 导出的格式，提取其中的 tokens 数组
+        if (envData && envData.tokens && Array.isArray(envData.tokens)) {
+          envData = envData.tokens;
+        }
+        
+        if (Array.isArray(envData)) {
+          // 使用 refresh_token 作为唯一标识进行合并，环境变量优先
+          const envMap = new Map(envData.map(t => [t.refresh_token, t]));
+          const fileMap = new Map(fileTokens.map(t => [t.refresh_token, t]));
+          
+          // 合并逻辑：环境变量覆盖文件内容
+          for (const [rt, token] of envMap) {
+            fileMap.set(rt, token);
+          }
+          fileTokens = Array.from(fileMap.values());
+          log.info(`✓ 已从 ACCOUNT_JSON 环境变量加载并合并 ${envData.length} 个账号`);
+        }
+      } catch (err) {
+        log.error('解析 ACCOUNT_JSON 环境变量失败:', err.message);
+      }
+    }
+
+    this._cache = fileTokens;
     this._cacheTime = Date.now();
     return this._cache;
   }
