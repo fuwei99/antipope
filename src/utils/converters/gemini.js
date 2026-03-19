@@ -165,6 +165,12 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
     const isImageModel = actualModelName.includes('-image');
     if (config.perfectProtocol && !isImageModel) {
       request.contents = wrapOfficialProtocol(request.contents, request.systemInstruction);
+      // 完美复刻模式下覆盖为官方精确参数
+      request.generationConfig = getOfficialGenerationConfig(actualModelName);
+    } else {
+      // 非完美复刻或图片模型走原有逻辑
+      const normalizedParams = normalizeGeminiParameters(request.generationConfig || {});
+      request.generationConfig = toGenerationConfig(normalizedParams, enableThinking, actualModelName);
     }
   }
 
@@ -174,12 +180,6 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
     request.tools = getOfficialTools();
   }
 
-
-  // 使用统一参数规范化模块处理 Gemini 格式参数
-  const normalizedParams = normalizeGeminiParameters(request.generationConfig || {});
-
-  // 转换为 generationConfig 格式
-  request.generationConfig = toGenerationConfig(normalizedParams, enableThinking, actualModelName);
   request.sessionId = token.sessionId;
   delete request.safetySettings;
 

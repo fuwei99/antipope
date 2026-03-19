@@ -191,3 +191,43 @@ export function getOfficialTools() {
     }
   ];
 }
+/**
+ * 根据模型名称返回官方精确的 generationConfig
+ * 当 perfectProtocol 开启时，由转换器调用此函数覆盖默认参数
+ */
+export function getOfficialGenerationConfig(modelName) {
+  const isClaudeModel = modelName.includes('claude');
+  const lowerName = modelName.toLowerCase();
+
+  // 根据模型确定 thinkingBudget
+  let thinkingBudget = 0;
+  if (lowerName.includes('pro-high')) {
+    thinkingBudget = 10001;
+  } else if (lowerName.includes('pro-low')) {
+    thinkingBudget = 1001;
+  } else if (lowerName.includes('flash-agent')) {
+    thinkingBudget = -1;
+  } else {
+    // 默认为 1024（如 Claude 系列或一般 Gemini 3.1）
+    thinkingBudget = 1024;
+  }
+
+  return {
+    temperature: isClaudeModel ? 0.4 : 1.0,
+    topP: 1,
+    topK: isClaudeModel ? 50 : 40,
+    candidateCount: 1,
+    maxOutputTokens: 16384,
+    stopSequences: [
+      "<|user|>",
+      "<|bot|>",
+      "<|context_request|>",
+      "<|endoftext|>",
+      "<|end_of_turn|>"
+    ],
+    thinkingConfig: {
+      includeThoughts: true,
+      thinkingBudget: thinkingBudget
+    }
+  };
+}
