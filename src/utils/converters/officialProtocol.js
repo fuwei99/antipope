@@ -88,6 +88,8 @@ export function wrapOfficialProtocol(messages, systemInstruction) {
   let systemText = '';
   if (systemInstruction && systemInstruction.parts) {
     systemText = systemInstruction.parts.map(p => p.text || '').join('\n');
+  } else if (typeof systemInstruction === 'string') {
+    systemText = systemInstruction;
   }
 
   const flattenedText = flattenHistory(messages);

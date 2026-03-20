@@ -4,6 +4,7 @@ import { generateRequestId } from '../idGenerator.js';
 import { getSignature, shouldCacheSignature, isImageModel } from '../thoughtSignatureCache.js';
 import { setToolNameMapping } from '../toolNameCache.js';
 import { getThoughtSignatureForModel, getToolSignatureForModel, sanitizeToolName, modelMapping, isEnableThinking, generateGenerationConfig } from '../utils.js';
+import { wrapOfficialProtocol, getOfficialTools, getOfficialGenerationConfig } from './officialProtocol.js';
 
 /**
  * 获取签名上下文
@@ -191,14 +192,30 @@ export function pushModelMessage({ parts, toolCalls, hasContent }, antigravityMe
  * @returns {Object} 请求体
  */
 export function buildRequestBody({ contents, tools, generationConfig, sessionId, systemInstruction }, token, actualModelName) {
-  const hasTools = tools && tools.length > 0;
+  const isImageModel = actualModelName.includes('-image');
+  let finalContents = contents;
+  let finalTools = tools;
+  let finalGenerationConfig = generationConfig;
+  let finalSystemInstruction = buildSystemInstruction(systemInstruction);
+
+  // 1. 处理完美复刻逻辑
+  if (config.perfectProtocol && !isImageModel) {
+    // 注入官方包装协议
+    finalContents = wrapOfficialProtocol(contents, finalSystemInstruction);
+    // 覆盖为官方工具集
+    finalTools = getOfficialTools();
+    // 覆盖为官方生成参数
+    finalGenerationConfig = getOfficialGenerationConfig(actualModelName);
+    // 包装后不再需要外层的 systemInstruction
+    finalSystemInstruction = null;
+  }
 
   const requestBody = {
     project: token.projectId,
     requestId: generateRequestId(),
     request: {
-      contents,
-      generationConfig,
+      contents: finalContents,
+      generationConfig: finalGenerationConfig,
       sessionId
     },
     model: actualModelName,
@@ -206,16 +223,15 @@ export function buildRequestBody({ contents, tools, generationConfig, sessionId,
     requestType: 'agent'
   };
 
-  // 只在有工具时才添加 tools 和 toolConfig 字段
-  if (hasTools) {
-    requestBody.request.tools = tools;
+  // 添加工具
+  if (finalTools && finalTools.length > 0) {
+    requestBody.request.tools = finalTools;
     requestBody.request.toolConfig = { functionCallingConfig: { mode: 'VALIDATED' } };
   }
 
-  // 构建系统提示词
-  const systemInstructionObj = buildSystemInstruction(systemInstruction);
-  if (systemInstructionObj) {
-    requestBody.request.systemInstruction = systemInstructionObj;
+  // 添加系统提示词 (如果没被合入 contents)
+  if (finalSystemInstruction) {
+    requestBody.request.systemInstruction = finalSystemInstruction;
   }
 
   return requestBody;

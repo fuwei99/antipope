@@ -161,16 +161,29 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
       }
     });
 
-    // 完美复刻逻辑注入 (排除图片生成模型)
+    // 1. 提前构建完整的系统提示词 (包含官方、反代、用户请求)
+    const systemInstructionObj = buildSystemInstruction(request.systemInstruction);
+
+    // 2. 完美复刻逻辑注入 (排除图片生成模型)
     const isImageModel = actualModelName.includes('-image');
     if (config.perfectProtocol && !isImageModel) {
-      request.contents = wrapOfficialProtocol(request.contents, request.systemInstruction);
+      // 使用构建后的完整系统指令进行包装
+      request.contents = wrapOfficialProtocol(request.contents, systemInstructionObj);
       // 完美复刻模式下覆盖为官方精确参数
       request.generationConfig = getOfficialGenerationConfig(actualModelName);
+      // 既然已经放入了 contents，删除外层字段
+      delete request.systemInstruction;
     } else {
-      // 非完美复刻或图片模型走原有逻辑
+      // 非完美复刻模式
       const normalizedParams = normalizeGeminiParameters(request.generationConfig || {});
       request.generationConfig = toGenerationConfig(normalizedParams, enableThinking, actualModelName);
+      
+      // 更新系统指令字段格式
+      if (systemInstructionObj) {
+        request.systemInstruction = systemInstructionObj;
+      } else {
+        delete request.systemInstruction;
+      }
     }
   }
 
@@ -186,15 +199,6 @@ export function generateGeminiRequestBody(geminiBody, modelName, token) {
   // 添加工具配置
   if (request.tools && request.tools.length > 0 && !request.toolConfig) {
     request.toolConfig = { functionCallingConfig: { mode: 'VALIDATED' } };
-  }
-
-  // 使用新的系统提示词构建函数，支持多 part 结构和位置配置
-  const existingSystemInstruction = request.systemInstruction;
-  const systemInstructionObj = buildSystemInstruction(existingSystemInstruction);
-  if (systemInstructionObj) {
-    request.systemInstruction = systemInstructionObj;
-  } else {
-    delete request.systemInstruction;
   }
 
   //console.log(JSON.stringify(request, null, 2))
